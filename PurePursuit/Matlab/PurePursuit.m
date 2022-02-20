@@ -19,9 +19,9 @@ controlPeriod = 0.05;
 
 
 %% 初始条件设置
-x = refTraj(1,1); % 小车初始状态
-y = refTraj(1,2);
-phi = refTraj(1,3);
+x = refTraj(1, 1); % 小车初始状态
+y = refTraj(1, 2);
+phi = refTraj(1, 3);
 v = 0;
 
 state = [x y phi v];
