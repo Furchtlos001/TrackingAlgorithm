@@ -113,17 +113,15 @@ function [speedCommand,deltaFrontCommand, idxRefPoint] = purePursuitControl(refT
     
     lengthTraj = 0; % 轨迹线长度
     while lengthTraj < Ld && idx < lengthOfRefTraj
-        lengthTraj = lengthTraj + norm(refTraj(idx+1, 1 : 2) - refTraj(idx, 1 : 2));
+        lengthTraj = lengthTraj + norm(refTraj(idx+1,1:2) - refTraj(idx,1:2));
         idx = idx + 1;
     end
-    idxRefPoint = idx; % 预瞄轨迹点索引值
-    
-    lookaheadPoint = refTraj(idxRefPoint, :);
-    alpha = atan2(lookaheadPoint(1, 2) - stateMeasured(1, 2), lookaheadPoint(1, 1) - stateMeasured(1, 1))  - stateMeasured(1, 3);
+    idxRefPoint = idx; % 预瞄轨迹点编号
+    lookaheadPoint = refTraj(idxRefPoint,:);
+    alpha = atan2(lookaheadPoint(1,2) - stateMeasured(1,2), lookaheadPoint(1,1) - stateMeasured(1,1))  - stateMeasured(1,3);
 
-   deltaFrontCommand = atan2(2 * L * sin(alpha), Ld);
-   
-   speedCommand = lookaheadPoint(1, 4);
+   deltaFrontCommand = atan2(2*L*sin(alpha), Ld);
+    speedCommand = lookaheadPoint(1,4);
 end
 
 %% 更新小车量测信息
@@ -147,67 +145,60 @@ function [trackingErrorOfPosition, trackingErrorOfAttitude] = calculateTrackingE
     for i = 1:1:lengthOfRefTraj
         dist(i,1) = norm(refTraj(i,1:2) - state(1,1:2));   
     end
-    [~,idx] = min(dist); % 距离最近轨迹点索引值
+    [~,idx] = min(dist); % 距离最近轨迹点编号
     
     if idx == 1
         idxRefPoint = idx;
     elseif idx == lengthOfRefTraj
         idxRefPoint = idx-1;
     else
-        if dist(idx - 1)<dist(idx + 1)
-            idxRefPoint = idx - 1;
+        if dist(idx-1)<dist(idx+1)
+            idxRefPoint = idx-1;
         else
             idxRefPoint = idx;
         end
     end
-    
     dist1 = dist(idxRefPoint);
-    dist2 = dist(idxRefPoint + 1);
-    refPoint = ([refTraj(idxRefPoint, 1) refTraj(idxRefPoint, 2) 0]*dist2 + [refTraj(idxRefPoint + 1, 1) refTraj(idxRefPoint + 1, 2) 0] * dist1) / (dist1 + dist2);
-    refPsi = (refTraj(idxRefPoint, 3) * dist2 + refTraj(idxRefPoint + 1, 3) * dist1) / (dist1 + dist2);
-    
-    posePointP = [state(1) state(2) 0];
-    posePointQ1 = refPoint;
-    
-    while refPsi > 2 * pi
-        refPsi = refPsi - 2 * pi;
+    dist2 = dist(idxRefPoint+1);
+    RefPoint = ([refTraj(idxRefPoint,1) refTraj(idxRefPoint,2) 0]*dist2+[refTraj(idxRefPoint+1,1) refTraj(idxRefPoint+1,2) 0]*dist1)/(dist1+dist2);
+    Ref_Psi = (refTraj(idxRefPoint,3)*dist2+refTraj(idxRefPoint+1,3)*dist1)/(dist1+dist2);
+    P = [state(1) state(2) 0];
+    Q1 = RefPoint;
+    while Ref_Psi > 2*pi
+        Ref_Psi = Ref_Psi-2*pi;
     end
-    while refPsi < -2 * pi
-        refPsi = refPsi + 2 * pi;
+    while Ref_Psi < -2*pi
+        Ref_Psi = Ref_Psi+2*pi;
     end
-    
-    if refPsi >= 0 && refPsi < pi / 2
-        detX = 1;
-    elseif refPsi > pi / 2 && refPsi<pi * 3 / 2
-        detX = -1;
-    elseif refPsi > pi * 3 / 2 && refPsi < pi * 2
-        detX = 1;
+    if Ref_Psi>=0&&Ref_Psi<pi/2
+        det_x = 1;
+    elseif Ref_Psi>pi/2&&Ref_Psi<pi*3/2
+        det_x = -1;
+    elseif Ref_Psi>pi*3/2&&Ref_Psi<pi*2
+        det_x = 1;
     end
-    
-    posePointQ2 = [refPoint(1) + detX, refPoint(2) + detX * tan(refPsi), 0];
-    
-    errYVec = cross(posePointQ1 - posePointP, posePointQ2 - posePointQ1) / norm(posePointQ2 - posePointQ1);
-    
-    trackingErrorOfPosition = errYVec(3);
-    trackingErrorOfAttitude = state(3)-refPsi;
+    Q2 = [RefPoint(1)+det_x RefPoint(2)+det_x*tan(Ref_Psi) 0];
+    err_y_vec = cross(Q1-P,Q2-Q1)/norm(Q2-Q1);
+    trackingErrorOfPosition = err_y_vec(3);
+    trackingErrorOfAttitude = state(3)-Ref_Psi;
 end
 
 %% 更新小车状态量
-function stateNew = updateState(speedCommand, deltaFrontCommand, stateOld,dt, L)
+function state_new = updateState(speedCommand,delta_f_command,state_old,dt,L)
     Tv = 0.10;
-    a = (speedCommand-stateOld(4)) / Tv;
+    a = (speedCommand-state_old(4)) / Tv;
 
     persistent delta_f;
     if isempty(delta_f)
         delta_f = 0;
     end
-    errDeltaFront0 = 0.5 / 57.3;
+    err_delta_f0 = 0.5 / 57.3;
     Tw = 0.15;
-    dDeltaFront = (deltaFrontCommand - delta_f) / Tw; delta_f = delta_f + dDeltaFront * dt;
+    d_delta_f = (delta_f_command - delta_f) / Tw; delta_f = delta_f + d_delta_f * dt;
 
-    stateNew(1) = stateOld(1) + stateOld(4) * cos(stateOld(3)) * dt;
-    stateNew(2) = stateOld(2) + stateOld(4) * sin(stateOld(3)) * dt;
-    stateNew(3) = stateOld(3) + tan(delta_f + errDeltaFront0) * stateOld(4) / L * dt;
-    stateNew(4) = stateOld(4) + a * dt;
+    state_new(1) = state_old(1) + state_old(4) * cos(state_old(3)) * dt;
+    state_new(2) = state_old(2) + state_old(4) * sin(state_old(3)) * dt;
+    state_new(3) = state_old(3) + tan(delta_f + err_delta_f0) * state_old(4) / L * dt;
+    state_new(4) = state_old(4) + a * dt;
 end
     
